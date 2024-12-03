@@ -23,7 +23,7 @@ class LaneDetection:
         )
         self.distance_pub = rospy.Publisher("/limo/lane_x", Int32, queue_size=5)
         self.viz = rospy.get_param("~visualization", True)
-    
+
     def image_topic_callback(self, img):
         '''
             실제 이미지를 입력 받아서 동작하는 부분
@@ -31,10 +31,21 @@ class LaneDetection:
             2. 차선 영역만 ROI 지정 (applyROI)
             3. Bird-eye View 변환 (applyBirdEyeView)
             4. ROI 영역에서 윤곽선 검출 (applyCanny)
-            5. 직선 검출 (applyHoughLines)
+            5. 직선 검출 (applyHoughLine)
             6. 검출된 차선을 기반으로 거리 계산 (calcLaneDistance)
             7. 최종 검출된 값을 기반으로 카메라 좌표계 기준 차선 무게중심 점의 x, y 좌표 Publish
         '''
+        self.frame = self.cvbridge.compressed_imgmsg_to_cv2(img, "bgr8") #1
+        self.roi_image = self.applyROI(self.frame) #2
+        self.wrap_image = self.applyBirdEyeView(self.roi_image) #3
+        self.edge_image = self.applyCanny(self.wrap_image) #4
+        self.line = self.applyHoughLine(self.edge_image) #5
+        self.distance = self.calcLaneDistance(self.line) #6
+        self.distance_pub.publish(self.distance) #7
+
+        # visualization
+        if self.viz:
+            self.visResult()
 
 def run():
     new_class = LaneDetection()
