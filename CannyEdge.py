@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 import rospy
 from cv_bridge import CvBridge
 from sensor_msgs.msg import CompressedImage, Image
@@ -11,6 +12,9 @@ import numpy as np
 '''
 요약      : Lane Detection
 흐름      : Sub → ROI → Bird-eye View → CannyEdge(윤곽선 검출) → HoughLineTransform(직선 검출) → Pub(x, y)
+
+Sub → ROI → Bird-eye View → CannyEdge(윤곽선 검출) → HoughLineTransform(직선 검출) → Pub(x, y)
+
 '''
 
 class LaneDetection:
@@ -29,9 +33,9 @@ class LaneDetection:
         '''
             관심 영역 검출
         '''
-        return _img[360:480, 320:640]
+        return _img[360:480, 0:640]
     
-    def applyBirdEyeView(self, _img=np.ndarray(shape=(120, 320))):
+    def applyBirdEyeView(self, _img=np.ndarray(shape=(120, 640))):
         '''
             잘라낸 이미지에서 Bird-eye view 변환
         '''
@@ -50,7 +54,7 @@ class LaneDetection:
         ])
         matrix = cv2.getPerspectiveTransform(src_points, dst_points)    # 원근 변환 행렬 계산
         wrap_image = cv2.warpPerspective(_img, matrix, (width, height)) # 원근 변환 적용
-        return wrap_image # np.ndarray 형식의 이미지 (640, 480)
+        return wrap_image # np.ndarray 형식의 이미지
 
     def applyCanny(self, _img):
         '''
@@ -68,6 +72,21 @@ class LaneDetection:
         lines = cv2.HoughLinesP(edges, 1, np.pi / 180, 50, minLineLength=50, maxLineGap=20) #numpy.ndarray (검출된 직선의 시작점과 끝점을 포함하는 값들)
         return lines
     
+    def drawHoughLines(self, img, lines):
+        '''
+            원본 이미지에 검출된 직선을 표시
+            - img: 원본 이미지 (numpy.ndarray)
+            - lines: HoughLinesP에서 반환된 직선 데이터 (numpy.ndarray)
+        '''
+        if lines is not None:
+            for line in lines:
+                for x1, y1, x2, y2 in line:
+                    # 각 직선을 원본 이미지에 표시 (빨간색, 두께 2)
+                    cv2.line(img, (x1, y1), (x2, y2), (0, 0, 255), 2)
+        else:
+            print("No lines detected to draw.")
+        return img
+
     def calcLaneDistance(self, lines):
         '''
             직선들을 기반으로 차선의 모멘트 계산
@@ -82,7 +101,7 @@ class LaneDetection:
                     lane_centers.append((center_x, center_y))
             self.publishLaneCenter(lane_centers)
         except Exception as e:
-            rospy.logerr(f"Error in calcLaneDistance: {str(e)}")
+            #rospy.logerr(f"Error in calcLaneDistance: {str(e)}")
             return []
 
     def publishLaneCenter(self, lane_centers):
@@ -97,9 +116,24 @@ class LaneDetection:
                 point = Point()
                 point.x = center[0]
                 point.y = center[1]
+                #print("차선의 좌표: ", point.x, point.y)
                 self.distance_pub.publish(point) # 각 차선의 좌표를 하나씩 publish
         except Exception as e:
-            rospy.logerr(f"Error in publishLaneCenter: {str(e)}")
+            #rospy.logerr(f"Error in publishLaneCenter: {str(e)}")
+            return 
+    
+    def visResult(self):
+        '''
+            최종 결과가 추가된 원본 이미지 (lane_original)
+            차선 영역만 ROI로 잘라낸 이미지 (lane_cropped)
+            ROI 내부 중 특정 색 영역만 검출한 이미지 (lane_threshold)
+        '''
+        #cv2.circle(self.cropped_image, (self.x, self.y), 10, 255, -1)
+        cv2.imshow("lane_original", self.frame)
+        cv2.imshow("lane_cropped", self.roi_image)
+        cv2.imshow("lane_thresholded", self.edge_image)
+
+        cv2.waitKey(1)
 
     def image_topic_callback(self, img):
         '''
@@ -118,6 +152,8 @@ class LaneDetection:
         self.edge_image = self.applyCanny(self.wrap_image) #4
         self.lines = self.applyHoughLine(self.edge_image) #5
         self.distance = self.calcLaneDistance(self.lines) #6 #7
+
+        self.drawHoughLines(img, self.lines)
 
         # visualization
         if self.viz:
