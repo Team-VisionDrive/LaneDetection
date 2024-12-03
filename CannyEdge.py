@@ -52,6 +52,14 @@ class LaneDetection:
 
         return wrap_image # np.ndarray 형식의 이미지 (640, 480)
 
+    def applyCanny(self, _img):
+        '''
+            윤곽선 검출
+        '''
+        gray = cv2.cvtColor(_img, cv2.COLOR_BGR2GRAY)
+        blur = cv2.GaussianBlur(gray, (5, 5), 0)
+        return cv2.Canny(blur, 50, 150)
+
     def image_topic_callback(self, img):
         '''
             실제 이미지를 입력 받아서 동작하는 부분
