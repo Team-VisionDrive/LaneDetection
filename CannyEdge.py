@@ -29,6 +29,28 @@ class LaneDetection:
             관심 영역 검출
         '''
         return _img[360:480, 320:640]
+    
+    def applyBirdEyeView(self, _img=np.ndarray(shape=(120, 320))):
+        '''
+            잘라낸 이미지에서 Bird-eye view 변환
+        '''
+        height, width = _img.shape[:2]       # (640, 480)
+        src_points = np.float32([            # 변환 전 사각형 영역
+            [0, height],                     # 왼쪽 아래
+            [width, height],                 # 오른쪽 아래
+            [width // 2 - 50, height // 2],  # 왼쪽 중간
+            [width // 2 + 50, height // 2]   # 오른쪽 중간
+        ])
+        dst_points = np.float32([            # 변환 후 사각형 영역
+            [0, height],                     # 왼쪽 아래
+            [width, height],                 # 오른쪽 아래
+            [width, 0],                      # 오른쪽 위
+            [0, 0]                           # 왼쪽 위
+        ])
+        matrix = cv2.getPerspectiveTransform(src_points, dst_points)    # 원근 변환 행렬 계산
+        wrap_image = cv2.warpPerspective(_img, matrix, (width, height)) # 원근 변환 적용
+
+        return wrap_image # np.ndarray 형식의 이미지 (640, 480)
 
     def image_topic_callback(self, img):
         '''
