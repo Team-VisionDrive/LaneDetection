@@ -24,6 +24,12 @@ class LaneDetection:
         self.distance_pub = rospy.Publisher("/limo/lane_x", Int32, queue_size=5)
         self.viz = rospy.get_param("~visualization", True)
 
+    def applyROI(self, _img=np.ndarray(shape=(480, 640))):
+        '''
+            관심 영역 검출
+        '''
+        return _img[360:480, 320:640]
+
     def image_topic_callback(self, img):
         '''
             실제 이미지를 입력 받아서 동작하는 부분
