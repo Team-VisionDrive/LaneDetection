@@ -2,6 +2,7 @@
 import rospy
 from cv_bridge import CvBridge
 from sensor_msgs.msg import CompressedImage, Image
+from geometry_msgs.msg import Point
 from std_msgs.msg import Int32
 #from dynamic_reconfigure.server import Server
 #from limo_application.cfg import image_processingConfig
@@ -21,7 +22,7 @@ class LaneDetection:
             CompressedImage, 
             self.image_topic_callback
         )
-        self.distance_pub = rospy.Publisher("/limo/lane_x", Int32, queue_size=5)
+        self.distance_pub = rospy.Publisher("/limo/lane_x", Point, queue_size=5)
         self.viz = rospy.get_param("~visualization", True)
 
     def applyROI(self, _img=np.ndarray(shape=(480, 640))):
@@ -49,7 +50,6 @@ class LaneDetection:
         ])
         matrix = cv2.getPerspectiveTransform(src_points, dst_points)    # 원근 변환 행렬 계산
         wrap_image = cv2.warpPerspective(_img, matrix, (width, height)) # 원근 변환 적용
-
         return wrap_image # np.ndarray 형식의 이미지 (640, 480)
 
     def applyCanny(self, _img):
@@ -67,6 +67,39 @@ class LaneDetection:
         '''
         lines = cv2.HoughLinesP(edges, 1, np.pi / 180, 50, minLineLength=50, maxLineGap=20) #numpy.ndarray (검출된 직선의 시작점과 끝점을 포함하는 값들)
         return lines
+    
+    def calcLaneDistance(self, lines):
+        '''
+            직선들을 기반으로 차선의 모멘트 계산
+            여러 차선에 대한 무게중심 (x, y)를 계산
+        '''
+        lane_centers = []
+        try:
+            for line in lines:
+                for x1, y1, x2, y2 in line:   # 각 직선의 중간점을 구함
+                    center_x = (x1 + x2) // 2
+                    center_y = (y1 + y2) // 2
+                    lane_centers.append((center_x, center_y))
+            self.publishLaneCenter(lane_centers)
+        except Exception as e:
+            rospy.logerr(f"Error in calcLaneDistance: {str(e)}")
+            return []
+
+    def publishLaneCenter(self, lane_centers):
+        '''
+            차선 무게중심을 ROS 메시지로 Publish (차선이 1개일 수도, 2개일 수도 있다.)
+        '''
+        try:
+            if not lane_centers:
+                rospy.logwarn("No lane centers to publish")
+                return
+            for center in lane_centers:          # 각 차선의 무게중심 좌표를 Point 메시지로 변환하여 publish
+                point = Point()
+                point.x = center[0]
+                point.y = center[1]
+                self.distance_pub.publish(point) # 각 차선의 좌표를 하나씩 publish
+        except Exception as e:
+            rospy.logerr(f"Error in publishLaneCenter: {str(e)}")
 
     def image_topic_callback(self, img):
         '''
@@ -76,16 +109,15 @@ class LaneDetection:
             3. Bird-eye View 변환 (applyBirdEyeView)
             4. ROI 영역에서 윤곽선 검출 (applyCanny)
             5. 직선 검출 (applyHoughLine)
-            6. 검출된 차선을 기반으로 거리 계산 (calcLaneDistance)
-            7. 최종 검출된 값을 기반으로 카메라 좌표계 기준 차선 무게중심 점의 x, y 좌표 Publish
+            6. 검출된 직선을 기반으로 차선의 모멘트 계산 (calcLaneDistance)
+            7. 최종 검출된 값을 기반으로 카메라 좌표계 기준 차선들의 중심 x, y 좌표 계산하고 Publish
         '''
         self.frame = self.cvbridge.compressed_imgmsg_to_cv2(img, "bgr8") #1
         self.roi_image = self.applyROI(self.frame) #2
         self.wrap_image = self.applyBirdEyeView(self.roi_image) #3
         self.edge_image = self.applyCanny(self.wrap_image) #4
         self.lines = self.applyHoughLine(self.edge_image) #5
-        self.distance = self.calcLaneDistance(self.lines) #6
-        self.distance_pub.publish(self.distance) #7
+        self.distance = self.calcLaneDistance(self.lines) #6 #7
 
         # visualization
         if self.viz:
