@@ -17,12 +17,12 @@ class ROI:
         rospy.init_node("lane_detect")
         self.cvbridge = CvBridge()
         rospy.Subscriber(
-            rospy.get_param("~image_topic_name", "/camera/rgb/image_raw/compressed"), 
+            "/camera/rgb/image_raw/compressed/compressed",
             CompressedImage, 
             self.image_topic_callback
         )
-        #self.distance_pub = rospy.Publisher("/limo/lane_x", Point, queue_size=5)
-        #self.viz = rospy.get_param("~visualization", True)
+        self.distance_pub = rospy.Publisher("/limo/lane_x", Point, queue_size=5)
+        self.viz = rospy.get_param("~visualization", True)
 
     def applyBirdEyeView(self, img): # Bird-eye view 변환하는 함수
         '''
@@ -48,6 +48,15 @@ class ROI:
         matrix = cv2.getPerspectiveTransform(src, dst)                              # 원근 변환 행렬 계산
         warped_img = cv2.warpPerspective(img, matrix, (img.shape[1], img.shape[0])) # Bird-eye view 변환 적용
         return warped_img # (640 x 480)
+
+    def applyCanny(self, _img):
+        '''
+            윤곽선 검출
+        '''
+        gray = cv2.cvtColor(_img, cv2.COLOR_BGR2GRAY)
+        blur = cv2.GaussianBlur(gray, (5, 5), 0)
+        edge_image = cv2.Canny(blur, 50, 150)
+        return edge_image
     
     def visResult(self):
         '''
@@ -55,29 +64,47 @@ class ROI:
             차선 영역만 ROI로 잘라낸 이미지 (lane_cropped)
             ROI 내부 중 특정 색 영역만 검출한 이미지 (lane_threshold)
         '''
-        #cv2.circle(self.cropped_image, (self.x, self.y), 10, 255, -1)
+        cv2.circle(self.edge_image, (self.x, self.y), 10, 255, -1)
+        cv2.imshow("original", self.frame)
+        cv2.imshow("bird eye view", self.bird_image)
+        cv2.imshow("Canny", self.edge_image)
         
-        self.frame
-        self.bird_image
-
-        # BGR 이미지를 RGB로 변환 (OpenCV는 기본적으로 BGR)
-        img1 = cv2.cvtColor(img1, cv2.COLOR_BGR2RGB)
-        img2 = cv2.cvtColor(img2, cv2.COLOR_BGR2RGB)
-
-        cv2.imshow("lane_original", self.frame)
-        cv2.imshow("lane_cropped", self.roi_image)
-        cv2.imshow("lane_thresholded", self.edge_image)
-
         cv2.waitKey(1)
+
+    def calcLaneDistance(self, _img=np.ndarray(shape=(480, 640))):
+        '''
+            최종 검출된 이미지를 이용하여 차선의 모멘트 계산
+            모멘트의 x, y 좌표 중 차량과의 거리에 해당하는 x를 반환
+        '''
+
+        try:
+            # x: offset
+            # y: offset
+
+            M = cv2.moments(_img)
+
+            self.x = int(M['m10']/M['m00'])
+            self.y = int(M['m01']/M['m00'])
+        except:
+
+            self.x = -1
+            self.y = -1
+        # print("x, y = {}, {}".format(x, y))
+        return self.x
 
     def image_topic_callback(self, img):
         '''
             실제 이미지를 입력 받아서 동작하는 부분
             1. CompressedImage --> OpenCV Type Image 변경 (compressed_imgmsg_to_cv2)
             2. ROI 지정 & Bird-eye View 변환 (applyBirdEyeView)
+            3. ROI 영역에서 윤곽선 검출 (applyCanny)
+            4. 검출된 직선을 기반으로 차선의 모멘트 계산 (calcLaneDistance)
+
         '''
         self.frame = self.cvbridge.compressed_imgmsg_to_cv2(img, "bgr8") #1
         self.bird_image = self.applyBirdEyeView(self.frame) #2
+        self.edge_image = self.applyCanny(self.bird_image) #3
+        self.left_distance = self.calcLaneDistance(self.edge_image)
 
         # visualization
         if self.viz:

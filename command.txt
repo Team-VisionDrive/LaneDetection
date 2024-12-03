@@ -1,0 +1,10 @@
+$ roscore
+
+# Terminal 1
+$ cd bag
+$ rosbag play camera_center.bag 
+
+# Terminal 2
+$ cd LaneDetection
+$ python filename.py
+
