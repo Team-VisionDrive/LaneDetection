@@ -96,6 +96,7 @@ class ROI:
             point = Point()
             point.x = 240-x
             point.y = y
+            print(point)
             self.distance_pub.publish(point) # 각 차선의 좌표를 하나씩 publish
         except Exception as e:
             #rospy.logerr(f"Error in publishLaneCenter: {str(e)}")
