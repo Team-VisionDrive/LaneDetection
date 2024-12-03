@@ -58,7 +58,15 @@ class LaneDetection:
         '''
         gray = cv2.cvtColor(_img, cv2.COLOR_BGR2GRAY)
         blur = cv2.GaussianBlur(gray, (5, 5), 0)
-        return cv2.Canny(blur, 50, 150)
+        edge_image = cv2.Canny(blur, 50, 150)
+        return edge_image
+    
+    def applyHoughLine(self, edges):
+        '''
+            Canny edge 검출 후의 이미지에서 직선 검출
+        '''
+        lines = cv2.HoughLinesP(edges, 1, np.pi / 180, 50, minLineLength=50, maxLineGap=20) #numpy.ndarray (검출된 직선의 시작점과 끝점을 포함하는 값들)
+        return lines
 
     def image_topic_callback(self, img):
         '''
@@ -75,8 +83,8 @@ class LaneDetection:
         self.roi_image = self.applyROI(self.frame) #2
         self.wrap_image = self.applyBirdEyeView(self.roi_image) #3
         self.edge_image = self.applyCanny(self.wrap_image) #4
-        self.line = self.applyHoughLine(self.edge_image) #5
-        self.distance = self.calcLaneDistance(self.line) #6
+        self.lines = self.applyHoughLine(self.edge_image) #5
+        self.distance = self.calcLaneDistance(self.lines) #6
         self.distance_pub.publish(self.distance) #7
 
         # visualization
