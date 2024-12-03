@@ -7,4 +7,3 @@ $ rosbag play camera_center.bag
 # Terminal 2
 $ cd LaneDetection
 $ python filename.py
-

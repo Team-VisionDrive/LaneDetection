@@ -8,8 +8,8 @@ from std_msgs.msg import Int32
 import cv2
 import numpy as np
 '''
-요약      : ROI & Canny
-흐름      : Sub → ROI → Bird-eye View → CannyEdge(윤곽선 검출) → 화면에 출력
+요약      : ROI & Canny & CalcDist
+흐름      : Sub → ROI → Bird-eye View → CannyEdge(윤곽선 검출) → CalcDist → 화면에 출력
 '''
 
 class ROI:
@@ -64,11 +64,33 @@ class ROI:
             차선 영역만 ROI로 잘라낸 이미지 (lane_cropped)
             ROI 내부 중 특정 색 영역만 검출한 이미지 (lane_threshold)
         '''
+        cv2.circle(self.edge_image, (self.x, self.y), 10, 255, -1)
         cv2.imshow("original", self.frame)
         cv2.imshow("bird eye view", self.bird_image)
         cv2.imshow("Canny", self.edge_image)
         
         cv2.waitKey(1)
+
+    def calcLaneDistance(self, _img=np.ndarray(shape=(480, 640))):
+        '''
+            최종 검출된 이미지를 이용하여 차선의 모멘트 계산
+            모멘트의 x, y 좌표 중 차량과의 거리에 해당하는 x를 반환
+        '''
+
+        try:
+            # x: offset
+            # y: offset
+
+            M = cv2.moments(_img)
+
+            self.x = int(M['m10']/M['m00'])
+            self.y = int(M['m01']/M['m00'])
+        except:
+
+            self.x = -1
+            self.y = -1
+        # print("x, y = {}, {}".format(x, y))
+        return self.x
 
     def image_topic_callback(self, img):
         '''
@@ -82,6 +104,7 @@ class ROI:
         self.frame = self.cvbridge.compressed_imgmsg_to_cv2(img, "bgr8") #1
         self.bird_image = self.applyBirdEyeView(self.frame) #2
         self.edge_image = self.applyCanny(self.bird_image) #3
+        self.left_distance = self.calcLaneDistance(self.edge_image) #4
 
         # visualization
         if self.viz:
