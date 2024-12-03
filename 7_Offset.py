@@ -82,6 +82,18 @@ class ROI:
 
             self.x = int(M['m10']/M['m00'])
             self.y = int(M['m01']/M['m00']) # maybe fix
+            img_width = _img.shape[1]       # offset
+            img_height = _img.shape[0]      # offset
+            
+            # Define an acceptable margin near the image edges
+            margin = 30  # this can be adjusted based on your needs
+
+            # Adjust the x position if it's too close to the left or right edge
+            if self.x < margin:
+                self.x += margin  # Apply offset towards the right if too close to the left
+            elif self.x > img_width - margin:
+                self.x -= margin  # Apply offset towards the left if too close to the right
+
 
         except:
             self.x = -1
@@ -94,7 +106,7 @@ class ROI:
             if not x and not y:
                 return
             point = Point()
-            point.x = 320-x
+            point.x = 240-x
             point.y = y
             print(point)
             self.distance_pub.publish(point) # 각 차선의 좌표를 하나씩 publish
