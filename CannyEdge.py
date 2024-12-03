@@ -12,9 +12,6 @@ import numpy as np
 '''
 요약      : Lane Detection
 흐름      : Sub → ROI → Bird-eye View → CannyEdge(윤곽선 검출) → HoughLineTransform(직선 검출) → Pub(x, y)
-
-Sub → ROI → Bird-eye View → CannyEdge(윤곽선 검출) → HoughLineTransform(직선 검출) → Pub(x, y)
-
 '''
 
 class LaneDetection:
